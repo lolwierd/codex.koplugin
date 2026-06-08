@@ -11,14 +11,14 @@ It reuses the exact OAuth client and backend that the official [OpenAI Codex CLI
 
 ## Features
 
-- 🔐 **Sign in with ChatGPT** via the device-code flow — approve on your phone/computer, no API key, no browser or callback server on the device.
-- 💬 **Chat** — real multi-turn conversations. Every answer has **Reply** (keeps context) and **New chat**.
-- 📚 **Ask about highlighted text** — select any passage and choose **Explain / Summarize / Define terms / Ask about this…**, then keep the thread going.
-- 🕘 **Persistent history** — past chats are saved on device (last 50), reopen and continue any of them.
-- 🌐 **Web search** toggle — uses the backend's hosted `web_search` tool so answers can use live internet results.
-- 🧠 **Thinking level** — reasoning effort from `minimal` → `xhigh`.
-- 🤖 **Model picker** — `gpt-5.5` (default), `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, … or a custom id.
-- 🔄 Tokens stored on device and auto-refreshed. WiFi is requested automatically when off (standard KOReader flow).
+- **Sign in with ChatGPT** via the device-code flow — approve on your phone/computer, no API key, no browser or callback server on the device.
+- **Chat** — real multi-turn conversations. Every answer has **Reply** (keeps context) and **New chat**.
+- **Ask about highlighted text** — select any passage and choose **Explain / Summarize / Define terms / Ask about this…**, then keep the thread going.
+- **Persistent history** — past chats are saved on device (last 50), reopen and continue any of them.
+- **Web search** toggle — uses the backend's hosted `web_search` tool so answers can use live internet results.
+- **Thinking level** — reasoning effort from `minimal` to `xhigh`.
+- **Model picker** — `gpt-5.5` (default), `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, or a custom id.
+- Tokens stored on device and auto-refreshed. WiFi is requested automatically when off (standard KOReader flow).
 
 ## Requirements
 
