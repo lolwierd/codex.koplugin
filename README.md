@@ -96,4 +96,8 @@ On-device data:
 - [KOReader](https://github.com/koreader/koreader)
 - Auth/endpoint design mirrors the [OpenAI Codex CLI](https://github.com/openai/codex).
 
+## License
+
+Released into the public domain under [The Unlicense](https://unlicense.org). See [LICENSE](LICENSE).
+
 Personal project. No warranty. Use at your own risk.
