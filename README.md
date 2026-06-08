@@ -99,5 +99,3 @@ On-device data:
 ## License
 
 Released into the public domain under [The Unlicense](https://unlicense.org). See [LICENSE](LICENSE).
-
-Personal project. No warranty. Use at your own risk.
