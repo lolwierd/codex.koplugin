@@ -463,6 +463,14 @@ function Codex:showConversation()
             },
         },
     }
+    -- ScrollTextWidget normally requests a partial refresh after scrolling.
+    -- On color Kobo devices that can repaint the white frame without the text,
+    -- leaving the conversation blank. Repaint the complete viewer instead.
+    local update_scroll_bar = viewer.scroll_text_w.updateScrollBar
+    viewer.scroll_text_w.updateScrollBar = function(scroll_widget)
+        update_scroll_bar(scroll_widget, false)
+        UIManager:setDirty(viewer, "ui")
+    end
     UIManager:show(viewer)
 end
 
