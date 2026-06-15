@@ -53,7 +53,7 @@ local Codex = WidgetContainer:extend{
 }
 
 local MAX_HISTORY = 50
-local TRANSCRIPT_PAGE_BYTES = 500
+local TRANSCRIPT_PAGE_BYTES = 950
 
 function Codex:init()
     self.config = LuaSettings:open(DataStorage:getSettingsDir() .. "/codex_config.lua")
@@ -476,7 +476,7 @@ function Codex:showConversation(page_index)
     viewer = TextViewer:new{
         title = T(_("Codex chat (%1/%2)"), page_index, #pages),
         text = pages[page_index],
-        text_type = "code",
+        text_type = "general",
         justified = false,
         add_default_buttons = false,
         buttons_table = {
