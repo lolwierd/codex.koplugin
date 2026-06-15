@@ -53,6 +53,7 @@ local Codex = WidgetContainer:extend{
 }
 
 local MAX_HISTORY = 50
+local TRANSCRIPT_PAGE_BYTES = 500
 
 function Codex:init()
     self.config = LuaSettings:open(DataStorage:getSettingsDir() .. "/codex_config.lua")
@@ -296,6 +297,28 @@ local function message_text(m)
     return table.concat(parts)
 end
 
+local function transcript_pages(text)
+    local pages = {}
+    local remaining = text
+    while #remaining > TRANSCRIPT_PAGE_BYTES do
+        local head = remaining:sub(1, TRANSCRIPT_PAGE_BYTES)
+        local cut = head:match("^.*()%s")
+        if not cut or cut < math.floor(TRANSCRIPT_PAGE_BYTES / 2) then
+            cut = TRANSCRIPT_PAGE_BYTES
+            while cut > 1 do
+                local byte = remaining:byte(cut + 1)
+                if not byte or byte < 128 or byte >= 192 then break end
+                cut = cut - 1
+            end
+        end
+        pages[#pages + 1] = remaining:sub(1, cut):gsub("%s+$", "")
+        remaining = remaining:sub(cut + 1):gsub("^%s+", "")
+    end
+    if remaining ~= "" then pages[#pages + 1] = remaining end
+    if #pages == 0 then pages[1] = _("No conversation text is available.") end
+    return pages
+end
+
 --------------------------------------------------------------------------------
 -- Persistent chat history
 --------------------------------------------------------------------------------
@@ -431,26 +454,40 @@ function Codex:sendConversation()
     end)
 end
 
---- Render the whole conversation with Reply / New chat buttons.
-function Codex:showConversation()
+--- Render the conversation as fixed pages to avoid TextViewer scroll failures.
+function Codex:showConversation(page_index)
     local parts = {}
     for _i, m in ipairs(self.messages) do
         local who = (m.role == "user") and _("You") or _("Codex")
         parts[#parts + 1] = who .. ":\n" .. message_text(m)
     end
     local transcript = table.concat(parts, "\n\n────────\n\n")
-    if transcript == "" then
-        transcript = _("No conversation text is available.")
-    end
+    local pages = transcript_pages(transcript)
+    page_index = math.max(1, math.min(page_index or #pages, #pages))
     logger.info("Codex: showing conversation", #self.messages, "messages",
-        #transcript, "bytes")
+        #transcript, "bytes", "page", page_index, "of", #pages)
+
+    local function show_page(index, viewer)
+        UIManager:close(viewer)
+        UIManager:scheduleIn(0.1, function() self:showConversation(index) end)
+    end
+
     local viewer
     viewer = TextViewer:new{
-        title = _("Codex chat"),
-        text = transcript,
+        title = T(_("Codex chat (%1/%2)"), page_index, #pages),
+        text = pages[page_index],
+        text_type = "code",
         justified = false,
-        add_default_buttons = true,
+        add_default_buttons = false,
         buttons_table = {
+            {
+                { text = _("Previous"), enabled = page_index > 1, callback = function()
+                    show_page(page_index - 1, viewer)
+                end },
+                { text = _("Next"), enabled = page_index < #pages, callback = function()
+                    show_page(page_index + 1, viewer)
+                end },
+            },
             {
                 { text = _("Reply"), callback = function()
                     UIManager:close(viewer)
@@ -463,13 +500,17 @@ function Codex:showConversation()
             },
         },
     }
-    -- ScrollTextWidget normally requests a partial refresh after scrolling.
-    -- On color Kobo devices that can repaint the white frame without the text,
-    -- leaving the conversation blank. Repaint the complete viewer instead.
-    local update_scroll_bar = viewer.scroll_text_w.updateScrollBar
-    viewer.scroll_text_w.updateScrollBar = function(scroll_widget)
-        update_scroll_bar(scroll_widget, false)
-        UIManager:setDirty(viewer, "ui")
+    if viewer.scroll_text_w.ges_events then
+        viewer.scroll_text_w.ges_events.ScrollText = nil
+        viewer.scroll_text_w.ges_events.TapScrollText = nil
+    end
+    viewer.onSwipe = function(_, _, ges)
+        if ges.direction == "north" or ges.direction == "west" then
+            if page_index < #pages then show_page(page_index + 1, viewer) end
+        elseif ges.direction == "south" or ges.direction == "east" then
+            if page_index > 1 then show_page(page_index - 1, viewer) end
+        end
+        return true
     end
     UIManager:show(viewer)
 end
