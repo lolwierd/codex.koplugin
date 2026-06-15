@@ -17,6 +17,7 @@ local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
+local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextViewer = require("ui/widget/textviewer")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
@@ -28,10 +29,16 @@ local Auth = require("codexauth")
 local Api = require("codexapi")
 
 local DEFAULT_INSTRUCTIONS =
-    "You are a knowledgeable, concise reading companion inside an e-reader. " ..
-    "The user is reading a book and may ask about a passage. Answer clearly in " ..
-    "plain language. Be reasonably brief unless asked for more detail. Do not " ..
-    "mention that you are Codex or a coding assistant."
+    "You are a knowledgeable reading companion inside an e-reader. The user " ..
+    "is reading a book and may ask about a passage. Answer clearly in plain " ..
+    "language and give enough detail to explain the subject properly. For an " ..
+    "explanatory question, normally write several focused paragraphs and " ..
+    "include relevant context, implications, and examples. Adapt to the " ..
+    "question, but do not be artificially terse. Output readable plain text, " ..
+    "not Markdown: do not use # headings, **bold**, backticks, code fences, " ..
+    "or tables. When a list is useful, use the bullet character •. Short " ..
+    "plain-text section labels are allowed. Do not mention that you are Codex " ..
+    "or a coding assistant."
 
 -- Models served by the openai-codex provider (chatgpt.com/backend-api/codex),
 -- per pi's live model picker. Default to the newest: gpt-5.5.
@@ -98,6 +105,16 @@ local function transcript_pages(text)
         pages[1] = _("No conversation text is available.")
     end
     return pages
+end
+
+local function style_page(text)
+    local bold_start = TextBoxWidget.PTF_BOLD_START
+    local bold_end = TextBoxWidget.PTF_BOLD_END
+    text = text:gsub("^You:", bold_start .. "You:" .. bold_end)
+    text = text:gsub("^Codex:", bold_start .. "Codex:" .. bold_end)
+    text = text:gsub("\nYou:", "\n" .. bold_start .. "You:" .. bold_end)
+    text = text:gsub("\nCodex:", "\n" .. bold_start .. "Codex:" .. bold_end)
+    return TextBoxWidget.PTF_HEADER .. text
 end
 
 function Codex:init()
@@ -527,7 +544,7 @@ function Codex:showConversation(page_index)
         end
         viewer = TextViewer:new{
             title = T(_("Codex chat (%1/%2)"), index, #pages),
-            text = pages[index],
+            text = style_page(pages[index]),
             justified = false,
             show_menu = false,
             add_default_buttons = false,
@@ -642,13 +659,17 @@ function Codex:selectionActions(text)
     dialog = ButtonDialog:new{
         buttons = {
             {{ text = _("Explain"), callback = function()
-                start("Explain the following passage in plain language:\n\n" .. text)
+                start("Explain the following passage thoroughly in plain language. " ..
+                    "Include the context, meaning, and significance needed to understand it:\n\n" ..
+                    text)
             end }},
             {{ text = _("Summarize"), callback = function()
-                start("Summarize the following passage concisely:\n\n" .. text)
+                start("Write a substantive summary of the following passage. Preserve " ..
+                    "its main argument, important details, and necessary context:\n\n" .. text)
             end }},
             {{ text = _("Define terms"), callback = function()
-                start("Briefly define any difficult words, names or references in this passage:\n\n" .. text)
+                start("Define the difficult words, names, and references in this passage, " ..
+                    "and explain why each matters in context:\n\n" .. text)
             end }},
             {{ text = _("Ask about this…"), callback = function()
                 UIManager:close(dialog)
