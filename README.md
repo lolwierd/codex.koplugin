@@ -12,7 +12,7 @@ It reuses the exact OAuth client and backend that the official [OpenAI Codex CLI
 ## Features
 
 - **Sign in with ChatGPT** via the device-code flow — approve on your phone/computer, no API key, no browser or callback server on the device.
-- **Chat** — real multi-turn conversations. Every answer has **Reply** (keeps context) and **New chat**.
+- **Chat** — real multi-turn conversations with page-based reading, history, replies, and new chats.
 - **Ask about highlighted text** — select any passage and choose **Explain / Summarize / Define terms / Ask about this…**, then keep the thread going.
 - **Persistent history** — past chats are saved on device (last 50), reopen and continue any of them.
 - **Web search** toggle — uses the backend's hosted `web_search` tool so answers can use live internet results.

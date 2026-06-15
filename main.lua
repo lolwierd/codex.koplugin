@@ -13,10 +13,10 @@ local DataStorage = require("datastorage")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local LuaSettings = require("luasettings")
+local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
-local TextViewer = require("ui/widget/textviewer")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 local util = require("util")
@@ -25,6 +25,7 @@ local T = require("ffi/util").template
 
 local Auth = require("codexauth")
 local Api = require("codexapi")
+local ChatViewer = require("codexchatviewer")
 
 local DEFAULT_INSTRUCTIONS =
     "You are a knowledgeable, concise reading companion inside an e-reader. " ..
@@ -53,7 +54,6 @@ local Codex = WidgetContainer:extend{
 }
 
 local MAX_HISTORY = 50
-local TRANSCRIPT_PAGE_BYTES = 950
 
 function Codex:init()
     self.config = LuaSettings:open(DataStorage:getSettingsDir() .. "/codex_config.lua")
@@ -297,28 +297,6 @@ local function message_text(m)
     return table.concat(parts)
 end
 
-local function transcript_pages(text)
-    local pages = {}
-    local remaining = text
-    while #remaining > TRANSCRIPT_PAGE_BYTES do
-        local head = remaining:sub(1, TRANSCRIPT_PAGE_BYTES)
-        local cut = head:match("^.*()%s")
-        if not cut or cut < math.floor(TRANSCRIPT_PAGE_BYTES / 2) then
-            cut = TRANSCRIPT_PAGE_BYTES
-            while cut > 1 do
-                local byte = remaining:byte(cut + 1)
-                if not byte or byte < 128 or byte >= 192 then break end
-                cut = cut - 1
-            end
-        end
-        pages[#pages + 1] = remaining:sub(1, cut):gsub("%s+$", "")
-        remaining = remaining:sub(cut + 1):gsub("^%s+", "")
-    end
-    if remaining ~= "" then pages[#pages + 1] = remaining end
-    if #pages == 0 then pages[1] = _("No conversation text is available.") end
-    return pages
-end
-
 --------------------------------------------------------------------------------
 -- Persistent chat history
 --------------------------------------------------------------------------------
@@ -365,7 +343,7 @@ function Codex:openChat(entry)
     for i, v in ipairs(entry.messages) do msgs[i] = v end
     self.messages = msgs
     self.current_chat_id = entry.id
-    self:showConversation()
+    self:showConversation(1)
 end
 
 function Codex:historyMenu()
@@ -388,6 +366,34 @@ function Codex:historyMenu()
         end,
     }
     return items
+end
+
+function Codex:showHistory()
+    local entries = self:getChatList()
+    if #entries == 0 then
+        UIManager:show(InfoMessage:new{ text = _("No saved chats.") })
+        return
+    end
+
+    local items = {}
+    local menu
+    for _, entry in ipairs(entries) do
+        local when = os.date("%Y-%m-%d %H:%M", entry.time or 0)
+        items[#items + 1] = {
+            text = entry.title .. "  ·  " .. when,
+            callback = function()
+                UIManager:close(menu)
+                UIManager:scheduleIn(0.1, function() self:openChat(entry) end)
+            end,
+        }
+    end
+    menu = Menu:new{
+        title = _("Codex chat history"),
+        item_table = items,
+        covers_fullscreen = true,
+        close_callback = function() UIManager:close(menu) end,
+    }
+    UIManager:show(menu)
 end
 
 --- Send the current self.messages to Codex and continue the conversation.
@@ -447,14 +453,12 @@ function Codex:sendConversation()
         self.messages[#self.messages + 1] = Api.assistantMessage(text)
         self:saveCurrentChat()
         logger.info("Codex: response ready", #text, "bytes")
-        -- Let KOReader finish closing the busy overlay before opening another
-        -- full-screen widget. Doing both in the same callback can paint a blank
-        -- TextViewer on e-ink devices.
+        -- Let KOReader finish closing the busy overlay before opening the chat.
         UIManager:scheduleIn(0.1, function() self:showConversation() end)
     end)
 end
 
---- Render the conversation as fixed pages to avoid TextViewer scroll failures.
+--- Render the conversation in a page-based viewer with no scroll widget.
 function Codex:showConversation(page_index)
     local parts = {}
     for _i, m in ipairs(self.messages) do
@@ -462,56 +466,16 @@ function Codex:showConversation(page_index)
         parts[#parts + 1] = who .. ":\n" .. message_text(m)
     end
     local transcript = table.concat(parts, "\n\n────────\n\n")
-    local pages = transcript_pages(transcript)
-    page_index = math.max(1, math.min(page_index or #pages, #pages))
     logger.info("Codex: showing conversation", #self.messages, "messages",
-        #transcript, "bytes", "page", page_index, "of", #pages)
+        #transcript, "bytes")
 
-    local function show_page(index, viewer)
-        UIManager:close(viewer)
-        UIManager:scheduleIn(0.1, function() self:showConversation(index) end)
-    end
-
-    local viewer
-    viewer = TextViewer:new{
-        title = T(_("Codex chat (%1/%2)"), page_index, #pages),
-        text = pages[page_index],
-        text_type = "general",
-        justified = false,
-        add_default_buttons = false,
-        buttons_table = {
-            {
-                { text = _("Previous"), enabled = page_index > 1, callback = function()
-                    show_page(page_index - 1, viewer)
-                end },
-                { text = _("Next"), enabled = page_index < #pages, callback = function()
-                    show_page(page_index + 1, viewer)
-                end },
-            },
-            {
-                { text = _("Reply"), callback = function()
-                    UIManager:close(viewer)
-                    self:replyPrompt()
-                end },
-                { text = _("New chat"), callback = function()
-                    UIManager:close(viewer)
-                    self:newChatPrompt()
-                end },
-            },
-        },
+    local viewer = ChatViewer:new{
+        text = transcript ~= "" and transcript or _("No conversation text is available."),
+        page = page_index or 1,
+        reply_callback = function() self:replyPrompt() end,
+        history_callback = function() self:showHistory() end,
+        new_chat_callback = function() self:newChatPrompt() end,
     }
-    if viewer.scroll_text_w.ges_events then
-        viewer.scroll_text_w.ges_events.ScrollText = nil
-        viewer.scroll_text_w.ges_events.TapScrollText = nil
-    end
-    viewer.onSwipe = function(_, _, ges)
-        if ges.direction == "north" or ges.direction == "west" then
-            if page_index < #pages then show_page(page_index + 1, viewer) end
-        elseif ges.direction == "south" or ges.direction == "east" then
-            if page_index > 1 then show_page(page_index - 1, viewer) end
-        end
-        return true
-    end
     UIManager:show(viewer)
 end
 
