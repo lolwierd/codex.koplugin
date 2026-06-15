@@ -82,7 +82,7 @@ local function transcript_pages(text)
     local text_widget = measurement.scroll_text_w.text_widget
     local lines = text_widget.vertical_string_list
     local lines_per_page = text_widget.lines_per_page
-    local charlist = text_widget.charlist
+    local charlist = util.splitToChars(text)
     local pages = {}
 
     for line_num = 1, #lines, lines_per_page do
