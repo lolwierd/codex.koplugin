@@ -18,6 +18,7 @@ It reuses the exact OAuth client and backend that the official [OpenAI Codex CLI
 - **Web search** toggle — uses the backend's hosted `web_search` tool so answers can use live internet results.
 - **Thinking level** — reasoning effort from `minimal` to `xhigh`.
 - **Model picker** — `gpt-5.5` (default), `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, or a custom id.
+- **Self-updates** — check GitHub Releases from the plugin menu, install the latest ZIP, and restart KOReader.
 - Tokens stored on device and auto-refreshed. WiFi is requested automatically when off (standard KOReader flow).
 
 ## Requirements
@@ -49,6 +50,7 @@ Then **fully restart KOReader** (exit and relaunch, not just back out).
 2. **Chat** — **Codex (ChatGPT) → Chat with Codex…**, type a question. Use **Reply** to follow up.
 3. **From a book** — highlight text → **Ask Codex** → pick an action.
 4. **History** — **Codex (ChatGPT) → Chat history** to reopen past conversations.
+5. **Updates** — **Codex (ChatGPT) → Check for updates** to install a newer GitHub release.
 
 Tweak **Model**, **Thinking**, and **Web search** from the same menu.
 

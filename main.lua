@@ -129,6 +129,13 @@ function Codex:addToMainMenu(menu_items)
                 text_func = function() return T(_("Thinking: %1"), self:getReasoning()) end,
                 sub_item_table_func = function() return self:reasoningMenu() end,
             },
+            {
+                text = _("Check for updates"),
+                separator = true,
+                callback = function()
+                    require("codexupdater").check()
+                end,
+            },
         },
     }
 end
@@ -276,8 +283,17 @@ end
 --------------------------------------------------------------------------------
 
 local function message_text(m)
-    local c = m.content and m.content[1]
-    return (c and c.text) or ""
+    if type(m) ~= "table" then return "" end
+    if type(m.content) == "string" then return m.content end
+    if type(m.content) ~= "table" then return "" end
+
+    local parts = {}
+    for _, c in ipairs(m.content) do
+        if type(c) == "table" and type(c.text) == "string" then
+            parts[#parts + 1] = c.text
+        end
+    end
+    return table.concat(parts)
 end
 
 --------------------------------------------------------------------------------
@@ -390,7 +406,9 @@ function Codex:sendConversation()
             UIManager:show(InfoMessage:new{
                 text = T(_("Codex crashed: %1"), tostring(text)),
             })
-            if #self.messages > 0 then self:showConversation() end
+            if #self.messages > 0 then
+                UIManager:scheduleIn(0.1, function() self:showConversation() end)
+            end
             return
         end
         if not text then
@@ -398,12 +416,18 @@ function Codex:sendConversation()
             UIManager:show(InfoMessage:new{
                 text = T(_("Codex error: %1"), tostring(err or "no response")),
             })
-            if #self.messages > 0 then self:showConversation() end
+            if #self.messages > 0 then
+                UIManager:scheduleIn(0.1, function() self:showConversation() end)
+            end
             return
         end
         self.messages[#self.messages + 1] = Api.assistantMessage(text)
         self:saveCurrentChat()
-        self:showConversation()
+        logger.info("Codex: response ready", #text, "bytes")
+        -- Let KOReader finish closing the busy overlay before opening another
+        -- full-screen widget. Doing both in the same callback can paint a blank
+        -- TextViewer on e-ink devices.
+        UIManager:scheduleIn(0.1, function() self:showConversation() end)
     end)
 end
 
@@ -415,6 +439,11 @@ function Codex:showConversation()
         parts[#parts + 1] = who .. ":\n" .. message_text(m)
     end
     local transcript = table.concat(parts, "\n\n────────\n\n")
+    if transcript == "" then
+        transcript = _("No conversation text is available.")
+    end
+    logger.info("Codex: showing conversation", #self.messages, "messages",
+        #transcript, "bytes")
     local viewer
     viewer = TextViewer:new{
         title = _("Codex chat"),
@@ -435,10 +464,6 @@ function Codex:showConversation()
         },
     }
     UIManager:show(viewer)
-    -- Jump to the latest message instead of starting at the top.
-    if viewer.scroll_text_w then
-        viewer.scroll_text_w:scrollToBottom()
-    end
 end
 
 --- Generic single-line/multi-line prompt; calls fn(text) on submit.
