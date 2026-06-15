@@ -17,6 +17,7 @@ local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
 local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
+local TextViewer = require("ui/widget/textviewer")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local logger = require("logger")
 local util = require("util")
@@ -25,7 +26,6 @@ local T = require("ffi/util").template
 
 local Auth = require("codexauth")
 local Api = require("codexapi")
-local ChatViewer = require("codexchatviewer")
 
 local DEFAULT_INSTRUCTIONS =
     "You are a knowledgeable, concise reading companion inside an e-reader. " ..
@@ -54,6 +54,51 @@ local Codex = WidgetContainer:extend{
 }
 
 local MAX_HISTORY = 50
+
+local function viewer_buttons()
+    return {
+        {
+            { text = _("Previous"), callback = function() end },
+            { text = _("Next"), callback = function() end },
+        },
+        {
+            { text = _("Reply"), callback = function() end },
+            { text = _("History"), callback = function() end },
+            { text = _("New chat"), callback = function() end },
+        },
+    }
+end
+
+--- Split text at the exact wrapped-line boundaries used by TextViewer.
+local function transcript_pages(text)
+    local measurement = TextViewer:new{
+        title = _("Codex chat"),
+        text = text,
+        justified = false,
+        show_menu = false,
+        add_default_buttons = false,
+        buttons_table = viewer_buttons(),
+    }
+    local text_widget = measurement.scroll_text_w.text_widget
+    local lines = text_widget.vertical_string_list
+    local lines_per_page = text_widget.lines_per_page
+    local charlist = text_widget.charlist
+    local pages = {}
+
+    for line_num = 1, #lines, lines_per_page do
+        local next_page_line = lines[line_num + lines_per_page]
+        local end_char = next_page_line and next_page_line.offset - 1 or #charlist
+        pages[#pages + 1] = table.concat(
+            charlist, "", lines[line_num].offset, end_char
+        )
+    end
+    measurement:free()
+
+    if #pages == 0 then
+        pages[1] = _("No conversation text is available.")
+    end
+    return pages
+end
 
 function Codex:init()
     self.config = LuaSettings:open(DataStorage:getSettingsDir() .. "/codex_config.lua")
@@ -458,7 +503,7 @@ function Codex:sendConversation()
     end)
 end
 
---- Render the conversation in a page-based viewer with no scroll widget.
+--- Render one immutable, exactly measured page of the conversation.
 function Codex:showConversation(page_index)
     local parts = {}
     for _i, m in ipairs(self.messages) do
@@ -466,17 +511,67 @@ function Codex:showConversation(page_index)
         parts[#parts + 1] = who .. ":\n" .. message_text(m)
     end
     local transcript = table.concat(parts, "\n\n────────\n\n")
+    if transcript == "" then
+        transcript = _("No conversation text is available.")
+    end
+    local pages = transcript_pages(transcript)
+    page_index = math.max(1, math.min(page_index or 1, #pages))
     logger.info("Codex: showing conversation", #self.messages, "messages",
-        #transcript, "bytes")
+        #transcript, "bytes", "page", page_index, "of", #pages)
 
-    local viewer = ChatViewer:new{
-        text = transcript ~= "" and transcript or _("No conversation text is available."),
-        page = page_index or 1,
-        reply_callback = function() self:replyPrompt() end,
-        history_callback = function() self:showHistory() end,
-        new_chat_callback = function() self:newChatPrompt() end,
-    }
-    UIManager:show(viewer)
+    local function show_page(index)
+        local viewer
+        local function replace_page(new_index)
+            UIManager:close(viewer)
+            show_page(new_index)
+        end
+        viewer = TextViewer:new{
+            title = T(_("Codex chat (%1/%2)"), index, #pages),
+            text = pages[index],
+            justified = false,
+            show_menu = false,
+            add_default_buttons = false,
+            buttons_table = {
+                {
+                    {
+                        text = _("Previous"),
+                        enabled = index > 1,
+                        callback = function() replace_page(index - 1) end,
+                    },
+                    {
+                        text = _("Next"),
+                        enabled = index < #pages,
+                        callback = function() replace_page(index + 1) end,
+                    },
+                },
+                {
+                    {
+                        text = _("Reply"),
+                        callback = function()
+                            UIManager:close(viewer)
+                            self:replyPrompt()
+                        end,
+                    },
+                    {
+                        text = _("History"),
+                        callback = function()
+                            UIManager:close(viewer)
+                            self:showHistory()
+                        end,
+                    },
+                    {
+                        text = _("New chat"),
+                        callback = function()
+                            UIManager:close(viewer)
+                            self:newChatPrompt()
+                        end,
+                    },
+                },
+            },
+        }
+        UIManager:show(viewer)
+    end
+    show_page(page_index)
 end
 
 --- Generic single-line/multi-line prompt; calls fn(text) on submit.
