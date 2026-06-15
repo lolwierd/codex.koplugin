@@ -52,8 +52,18 @@ local MODEL_PRESETS = {
 }
 
 -- Reasoning effort ("thinking"). More effort = slower but deeper answers.
-local REASONING_PRESETS = { "minimal", "low", "medium", "high", "xhigh" }
+local REASONING_PRESETS = { "none", "low", "medium", "high", "xhigh" }
 local DEFAULT_REASONING = "medium"
+local SUPPORTED_REASONING = {}
+for _, reasoning in ipairs(REASONING_PRESETS) do
+    SUPPORTED_REASONING[reasoning] = true
+end
+
+local function normalize_reasoning(reasoning)
+    if reasoning == "minimal" then return "none" end
+    if SUPPORTED_REASONING[reasoning] then return reasoning end
+    return DEFAULT_REASONING
+end
 
 local Codex = WidgetContainer:extend{
     name = "codex",
@@ -120,6 +130,14 @@ end
 function Codex:init()
     self.config = LuaSettings:open(DataStorage:getSettingsDir() .. "/codex_config.lua")
     self.chats = LuaSettings:open(DataStorage:getSettingsDir() .. "/codex_chats.lua")
+    local saved_reasoning = self.config:readSetting("reasoning")
+    if saved_reasoning then
+        local reasoning = normalize_reasoning(saved_reasoning)
+        if reasoning ~= saved_reasoning then
+            self.config:saveSetting("reasoning", reasoning)
+            self.config:flush()
+        end
+    end
     self.ui.menu:registerToMainMenu(self)
     if self.ui.highlight then
         self:addToHighlightDialog()
@@ -135,7 +153,7 @@ function Codex:webSearchEnabled()
 end
 
 function Codex:getReasoning()
-    return self.config:readSetting("reasoning") or DEFAULT_REASONING
+    return normalize_reasoning(self.config:readSetting("reasoning"))
 end
 
 --------------------------------------------------------------------------------

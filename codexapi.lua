@@ -118,7 +118,7 @@ end
 -- @param messages    array of Responses-API input items (see userMessage/assistantMessage)
 -- @param model       model id (e.g. "gpt-5.5")
 -- @param web_search  boolean: offer the hosted web_search tool
--- @param reasoning   reasoning effort string ("minimal".."xhigh"), or nil for default
+-- @param reasoning   reasoning effort string ("none", "low", "medium", "high", "xhigh")
 function Api:askMessages(token, account_id, instructions, messages, model, web_search, reasoning)
     local payload = {
         model = model or "gpt-5.5",
