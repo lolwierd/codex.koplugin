@@ -93,7 +93,15 @@ local function transcript_pages(text)
         add_default_buttons = false,
         buttons_table = viewer_buttons(),
     }
-    local text_widget = measurement.scroll_text_w.text_widget
+    -- KOReader 2026.07 exposes TextViewer's text widget as box_widget;
+    -- older builds used scroll_text_w. Support both layouts.
+    local text_widget = measurement.box_widget
+        or (measurement.scroll_widget and measurement.scroll_widget.text_widget)
+        or (measurement.scroll_text_w and measurement.scroll_text_w.text_widget)
+    if not text_widget then
+        measurement:free()
+        return { text }
+    end
     local lines = text_widget.vertical_string_list
     local lines_per_page = text_widget.lines_per_page
     local charlist = util.splitToChars(text)
