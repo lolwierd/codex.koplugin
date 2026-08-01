@@ -98,6 +98,63 @@ local function show_releases_error(message)
     end
 end
 
+local function shell_quote(value)
+    return "'" .. tostring(value):gsub("'", "'\\''") .. "'"
+end
+
+local function command_ok(command)
+    local result = os.execute(command)
+    return result == true or result == 0
+end
+
+-- Older KOReader builds do not expose Device:unpackArchive. Fall back to the
+-- unzip utility shipped on Kobo (and keep the native path for other devices).
+local function unpack_archive(archive_path, plugin_path)
+    if type(Device.unpackArchive) == "function" then
+        return Device:unpackArchive(archive_path, plugin_path, true)
+    end
+
+    local staging = plugin_path .. ".staging"
+    local extracted = staging .. "/codex.koplugin"
+    local legacy_extracted = staging .. "/codex"
+    local target = plugin_path .. ".new"
+    local old = plugin_path .. ".old"
+    local q_archive = shell_quote(archive_path)
+    local q_staging = shell_quote(staging)
+
+    if not command_ok("rm -rf " .. shell_quote(staging) .. " " .. shell_quote(target) ..
+            " && mkdir -p " .. q_staging .. " && unzip -q -o " .. q_archive ..
+            " -d " .. q_staging) then
+        return false, "Could not extract the update archive."
+    end
+
+    if lfs.attributes(extracted, "mode") == "directory" then
+        -- preferred archive layout
+    elseif lfs.attributes(legacy_extracted, "mode") == "directory" then
+        extracted = legacy_extracted
+    elseif lfs.attributes(staging .. "/_meta.lua", "mode") == "file" then
+        extracted = staging
+    else
+        os.execute("rm -rf " .. q_staging)
+        return false, "The update archive has an unexpected layout."
+    end
+
+    if not command_ok("mkdir -p " .. shell_quote(target) .. " && cp -R " ..
+            shell_quote(extracted) .. "/. " .. shell_quote(target) .. "/") then
+        os.execute("rm -rf " .. q_staging .. " " .. shell_quote(target))
+        return false, "Could not stage the extracted update."
+    end
+
+    os.execute("rm -rf " .. q_staging .. " " .. shell_quote(old))
+    if not command_ok("mv " .. shell_quote(plugin_path) .. " " .. shell_quote(old) ..
+            " && mv " .. shell_quote(target) .. " " .. shell_quote(plugin_path)) then
+        os.execute("rm -rf " .. shell_quote(target))
+        return false, "Could not install the extracted update."
+    end
+    os.execute("rm -rf " .. shell_quote(old))
+    return true
+end
+
 function Updater.install(url, version)
     UIManager:show(InfoMessage:new{ text = _("Downloading update..."), timeout = 1 })
     UIManager:scheduleIn(0.1, function()
@@ -132,7 +189,7 @@ function Updater.install(url, version)
         file:close()
 
         local plugin_path = DataStorage:getDataDir() .. "/plugins/codex.koplugin"
-        local unpacked, err = Device:unpackArchive(archive_path, plugin_path, true)
+        local unpacked, err = unpack_archive(archive_path, plugin_path)
         pcall(os.remove, archive_path)
         if not unpacked then
             UIManager:show(InfoMessage:new{
