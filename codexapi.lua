@@ -3,8 +3,8 @@ Calls the ChatGPT Codex backend `/responses` endpoint with an OAuth bearer
 token (same endpoint/headers the Codex CLI and `pi` use) and returns the
 assistant's text.
 
-We request a non-streamed response for simple parsing, but the parser also
-copes with a Server-Sent-Events stream in case the backend insists on one.
+We request a Server-Sent-Events response and keep the parser tolerant of a
+single JSON response as well, since the backend may return either shape.
 
 @module codex.api
 --]]--
@@ -22,6 +22,16 @@ local Api = {
     ORIGINATOR = "codex_cli_rs",
     USER_AGENT = "codex_cli_rs/0.0.0 (KOReader; codex.koplugin)",
 }
+
+local function error_message(err, fallback)
+    if type(err) == "table" and type(err.message) == "string" then
+        return err.message
+    end
+    if type(err) == "string" and err ~= "" then
+        return err
+    end
+    return fallback
+end
 
 local function build_headers(token, account_id, web_search)
     local h = {
@@ -50,9 +60,10 @@ local function text_from_response_obj(obj)
     if type(out) ~= "table" then return nil end
     local chunks = {}
     for _, item in ipairs(out) do
-        if type(item) == "table" and item.content then
+        if type(item) == "table" and type(item.content) == "table" then
             for _, c in ipairs(item.content) do
-                if type(c) == "table" and c.type == "output_text" and c.text then
+                if type(c) == "table" and c.type == "output_text"
+                        and type(c.text) == "string" then
                     chunks[#chunks + 1] = c.text
                 end
             end
@@ -64,13 +75,13 @@ end
 
 --- Parse either a single JSON object or an SSE stream of events.
 local function parse_body(raw)
-    -- Try plain JSON first (stream=false).
+    -- Try plain JSON first in case the backend ignores the stream request.
     local ok, obj = pcall(JSON.decode, raw)
     if ok then
         local t = text_from_response_obj(obj)
         if t then return t end
         if obj and obj.error then
-            return nil, (obj.error.message or "API error")
+            return nil, error_message(obj.error, "API error")
         end
     end
     -- Fall back to SSE: accumulate output_text deltas / final completed event.
@@ -82,12 +93,13 @@ local function parse_body(raw)
         if data and data ~= "[DONE]" then
             local okd, evt = pcall(JSON.decode, data)
             if okd and type(evt) == "table" then
-                if evt.type == "response.output_text.delta" and evt.delta then
+                if evt.type == "response.output_text.delta"
+                        and type(evt.delta) == "string" then
                     deltas[#deltas + 1] = evt.delta
                 elseif evt.type == "response.completed" then
                     final = text_from_response_obj(evt.response or evt)
                 elseif evt.type == "error" or evt.error then
-                    api_err = (evt.error and evt.error.message) or evt.message or "API error"
+                    api_err = error_message(evt.error, evt.message or "API error")
                 end
             end
         end
@@ -116,12 +128,12 @@ end
 -- @param account_id  chatgpt account id (may be nil)
 -- @param instructions system prompt
 -- @param messages    array of Responses-API input items (see userMessage/assistantMessage)
--- @param model       model id (e.g. "gpt-5.5")
+-- @param model       model id (e.g. "gpt-5.6-luna")
 -- @param web_search  boolean: offer the hosted web_search tool
 -- @param reasoning   reasoning effort string ("none", "low", "medium", "high", "xhigh")
 function Api:askMessages(token, account_id, instructions, messages, model, web_search, reasoning)
     local payload = {
-        model = model or "gpt-5.5",
+        model = model or "gpt-5.6-luna",
         instructions = instructions,
         input = messages,
         store = false,
