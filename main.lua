@@ -15,7 +15,6 @@ local InputDialog = require("ui/widget/inputdialog")
 local LuaSettings = require("luasettings")
 local Menu = require("ui/widget/menu")
 local NetworkMgr = require("ui/network/manager")
-local Trapper = require("ui/trapper")
 local UIManager = require("ui/uimanager")
 local TextBoxWidget = require("ui/widget/textboxwidget")
 local TextViewer = require("ui/widget/textviewer")
@@ -40,15 +39,13 @@ local DEFAULT_INSTRUCTIONS =
     "plain-text section labels are allowed. Do not mention that you are Codex " ..
     "or a coding assistant."
 
--- Models served by the openai-codex provider (chatgpt.com/backend-api/codex),
--- per pi's live model picker. Default to the newest: gpt-5.5.
+-- Models served by the openai-codex provider (chatgpt.com/backend-api/codex).
+-- Keep the default model and reasoning effort separate: "Luna Medium" is
+-- gpt-5.6-luna with reasoning effort "medium".
 local MODEL_PRESETS = {
-    "gpt-5.5",             -- newest (default)
-    "gpt-5.4",
-    "gpt-5.4-mini",        -- fastest/cheapest
-    "gpt-5.3-codex",
-    "gpt-5.3-codex-spark",
-    "gpt-5.2",
+    "gpt-5.6-luna",        -- default: efficient, high-volume work
+    "gpt-5.6-terra",       -- everyday workhorse
+    "gpt-5.6-sol",         -- flagship capability
 }
 
 -- Reasoning effort ("thinking"). More effort = slower but deeper answers.
