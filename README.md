@@ -16,8 +16,8 @@ It reuses the exact OAuth client and backend that the official [OpenAI Codex CLI
 - **Ask about highlighted text** — select any passage and choose **Explain / Summarize / Define terms / Ask about this…**, then keep the thread going.
 - **Persistent history** — past chats are saved on device (last 50), reopen and continue any of them.
 - **Web search** toggle — uses the backend's hosted `web_search` tool so answers can use live internet results.
-- **Thinking level** — reasoning effort from `none` to `xhigh`.
-- **Model picker** — `gpt-5.5` (default), `gpt-5.4`, `gpt-5.4-mini`, `gpt-5.3-codex`, or a custom id.
+- **Thinking level** — reasoning effort from `none` to `xhigh` (default: `medium`).
+- **Model picker** — `gpt-5.6-luna` (default), `gpt-5.6-terra`, `gpt-5.6-sol`, or a custom id.
 - **Self-updates** — check GitHub Releases from the plugin menu, install the latest ZIP, and restart KOReader.
 - Tokens stored on device and auto-refreshed. WiFi is requested automatically when off (standard KOReader flow).
 
