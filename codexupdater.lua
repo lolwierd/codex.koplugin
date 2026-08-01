@@ -129,6 +129,7 @@ function Updater.install(url, version)
             show_releases_error(_("Download failed."))
             return
         end
+        file:close()
 
         local plugin_path = DataStorage:getDataDir() .. "/plugins/codex.koplugin"
         local unpacked, err = Device:unpackArchive(archive_path, plugin_path, true)
