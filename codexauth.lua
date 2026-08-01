@@ -97,7 +97,7 @@ local function decode_jwt(jwt)
     local parts = {}
     for p in jwt:gmatch("[^.]+") do parts[#parts + 1] = p end
     if #parts < 2 then return nil end
-    local payload = parts[2]
+    local payload = parts[2]:gsub("-", "+"):gsub("_", "/")
     -- pad to a multiple of 4 so the base64 decoder emits the final group
     local pad = (4 - (#payload % 4)) % 4
     payload = payload .. string.rep("=", pad)
@@ -148,8 +148,20 @@ local function persist_tokens(self, tokens)
     if tokens.access_token then s:saveSetting("access_token", tokens.access_token) end
     if tokens.refresh_token then s:saveSetting("refresh_token", tokens.refresh_token) end
     if tokens.id_token then s:saveSetting("id_token", tokens.id_token) end
-    if tokens.expires_in then
-        s:saveSetting("expires_at", os.time() + tonumber(tokens.expires_in) - 60)
+    local expires_in = tonumber(tokens.expires_in)
+    if expires_in then
+        s:saveSetting("expires_at", os.time() + expires_in - 60)
+    else
+        -- Refresh responses do not always include expires_in. Derive the
+        -- expiry from the access-token JWT so a successful refresh does not
+        -- cause another refresh on every subsequent request.
+        local claims = decode_jwt(tokens.access_token)
+        if claims and tonumber(claims.exp) then
+            s:saveSetting("expires_at", tonumber(claims.exp) - 60)
+        else
+            -- Last-resort backoff for an unusual token without expiry data.
+            s:saveSetting("expires_at", os.time() + 5 * 60)
+        end
     end
     -- account id + email come from the id_token (fall back to access token)
     local account_id = account_id_from_jwt(tokens.id_token) or account_id_from_jwt(tokens.access_token)
@@ -247,7 +259,7 @@ function Auth:refresh()
     })
     local code, res, raw = request("POST", self.TOKEN_URL,
         { ["Content-Type"] = "application/json" }, body)
-    if code ~= 200 or not res then
+    if code ~= 200 or not res or not res.access_token then
         logger.warn("Codex auth: refresh failed", code, raw)
         return false, "http_" .. tostring(code)
     end
