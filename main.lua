@@ -159,6 +159,9 @@ end
 
 function Codex:addToMainMenu(menu_items)
     menu_items.codex = {
+        -- Keep this plugin in the Tools section instead of marking it as a
+        -- newly discovered orphaned menu item with KOReader's "NEW: " prefix.
+        sorting_hint = "more_tools",
         text = _("Codex (ChatGPT)"),
         sub_item_table = {
             {
